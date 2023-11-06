@@ -14,15 +14,23 @@ defmodule Sendex do
 
   @sender %{
     name: Application.compile_env(:sendex, :sender_name),
+    phone: Application.compile_env(:sendex, :sender_phone),
     mail: Application.compile_env(:sendex, :sender_mail),
     reply: Application.compile_env(:sendex, :reply_to)
   }
 
   @spec help() :: :ok
   def help,
-    do: Logger.notice("To send emails to the mailing list, type: file_path |> Sendex.send_all")
+    do:
+      Logger.notice(
+        "To send emails to the mailing list, type: Sendex.send_all(file_path, template_path, attachments_list)"
+      )
 
-  def send_all(csv_file) do
+  def send_all(
+        csv_file,
+        template,
+        attachments
+      ) do
     recipients_map = csv_file |> build_mailing_list()
 
     {:ok, mailer} = recipients_map |> Mailer.start_link()
@@ -33,7 +41,7 @@ defmodule Sendex do
         result != :ok do
       result =
         recipient_value
-        |> build_mail()
+        |> build_mail(template, attachments)
         |> deliver()
 
       result
@@ -71,7 +79,7 @@ defmodule Sendex do
       [["title", "name", "city", "mail", "status", "data"] | results]
       |> CSV.dump_to_iodata()
 
-    "./priv/results/results_octobre_2023.csv"
+    "./priv/results/results.csv"
     |> File.write!(results)
 
     Mailer.stop_mailer(mailer)
@@ -114,26 +122,35 @@ defmodule Sendex do
     end)
   end
 
-  @spec build_mail(%Recipient{}) :: %Swoosh.Email{}
-  defp build_mail(%Recipient{title: title, name: name, city: city, mail: mail}) do
+  @spec build_mail(%Recipient{}, String.t(), img: String.t(), attachment: String.t()) ::
+          %Swoosh.Email{}
+  defp build_mail(
+         %Recipient{title: title, name: name, city: city, mail: mail},
+         template,
+         img: img,
+         attachment: attachment
+       ) do
     new()
     |> to({name, mail})
     |> from({@sender.name, @sender.mail})
     |> reply_to({@sender.name, @sender.reply})
-    |> subject("Proposition spectacle d'humour : Sandrine accouche !")
-    |> render_body("octobre_2023.html", %{
+    |> subject("Sandrine accouche à #{city}! (spectacle d'humour)")
+    |> render_body(template, %{
+      sender_name: @sender.name,
+      sender_phone: @sender.phone,
+      sender_mail: @sender.mail,
       title: title,
       name: name,
       city: city,
-      img_src: "cid:post_it.png"
+      img_src: "cid:" <> img
     })
     |> attachment(
-      Swoosh.Attachment.new({:data, File.read!("./priv/attachments/post_it.png")},
-        filename: "post_it.png",
+      Swoosh.Attachment.new({:data, File.read!("./priv/attachments/" <> img)},
+        filename: img,
         content_type: "image/png",
         type: :inline
       )
     )
-    |> attachment("./priv/attachments/DP_SANDRINE_ACCOUCHE_2023.pdf")
+    |> attachment("./priv/attachments/" <> attachment)
   end
 end

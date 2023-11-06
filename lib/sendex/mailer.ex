@@ -10,17 +10,17 @@ defmodule Sendex.Mailer do
   @typedoc "A tuple made of a :ok / :error atom and its data as returned by Swoosh.Mailer.deliver/2"
   @type delivery_result() :: {:ok | :error, term()}
 
-  @spec start_link(recipients_map()) :: {:error, any()} | {:ok, pid()}
   @doc "Starts the Mailer Agent; takes a recipients map as argument."
+  @spec start_link(recipients_map()) :: {:error, any()} | {:ok, pid()}
   def start_link(recipients_map), do: Agent.start_link(fn -> recipients_map end)
 
+  @doc "Updates the Agent state; takes a mailer pid, and a delivery result as arguments."
   @spec send_to(
           atom() | pid() | {atom(), any()} | {:via, atom(), any()},
           {non_neg_integer(), %Recipient{}},
           delivery_result()
         ) ::
           :ok
-  @doc "Updates the Agent state; takes a mailer pid, and a delivery result as arguments."
   def send_to(mailer, {recipient_key, _}, result) do
     Agent.update(mailer, fn recipients_map ->
       recipients_map

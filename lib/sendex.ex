@@ -134,7 +134,7 @@ defmodule Sendex do
     |> to({name, mail})
     |> from({@sender.name, @sender.mail})
     |> reply_to({@sender.name, @sender.reply})
-    |> subject("Sandrine accouche à #{city}! (spectacle d'humour)")
+    |> subject("Proposition spectacle d'humour: Sandrine accouche !")
     |> render_body(template, %{
       sender_name: @sender.name,
       sender_phone: @sender.phone,

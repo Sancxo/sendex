@@ -18,8 +18,11 @@ defmodule Sendex do
     reply: Application.compile_env(:sendex, :reply_to)
   }
 
+  @spec help() :: :ok
+  def help,
+    do: Logger.notice("To send emails to the mailing list, type: file_path |> Sendex.send_all")
+
   def send_all(csv_file) do
-    # recipients_map = build_mailing_list("./priv/spreadsheets/octobre_2023.csv")
     recipients_map = csv_file |> build_mailing_list()
 
     {:ok, mailer} = recipients_map |> Mailer.start_link()
@@ -50,11 +53,31 @@ defmodule Sendex do
     end
 
     # use these results to build a report
-    Mailer.get_results(mailer)
+    results =
+      mailer
+      |> Mailer.get_results()
+      |> Enum.map(fn {_key,
+                      %Recipient{
+                        title: title,
+                        name: name,
+                        city: city,
+                        mail: mail,
+                        sending_status: {status, data}
+                      }} ->
+        [title, name, city, mail, status, data |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)]
+      end)
+
+    results =
+      [["title", "name", "city", "mail", "status", "data"] | results]
+      |> CSV.dump_to_iodata()
+
+    "./priv/results/results_octobre_2023.csv"
+    |> File.write!(results)
 
     Mailer.stop_mailer(mailer)
   end
 
+  @spec build_mailing_list(binary() | list()) :: %{non_neg_integer() => %Recipient{}}
   defp build_mailing_list(file) when file |> is_binary,
     do: File.read!(file) |> CSV.parse_string() |> build_mailing_list()
 
@@ -90,9 +113,6 @@ defmodule Sendex do
         acc |> Map.put(acc |> map_size(), recipient)
     end)
   end
-
-  def help,
-    do: Logger.notice("To send emails to the mailing list, type: file_path |> Sendex.send_all")
 
   @spec build_mail(%Recipient{}) :: %Swoosh.Email{}
   defp build_mail(%Recipient{title: title, name: name, city: city, mail: mail}) do

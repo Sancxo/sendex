@@ -8,5 +8,6 @@ config :sendex, Sendex,
 
 config :sendex,
   sender_name: System.get_env("SENDER_NAME"),
+  sender_phone: System.get_env("SENDER_PHONE"),
   sender_mail: System.get_env("SENDER_MAIL"),
   reply_to: System.get_env("REPLY_TO")

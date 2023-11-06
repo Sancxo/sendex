@@ -1,7 +1,5 @@
 # private files
-/priv/attachments/*
-/priv/spreadsheets/*
-/priv/templates/*
+/priv/*/*
 
 # Environment variables file
 .env

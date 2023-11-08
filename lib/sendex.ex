@@ -20,6 +20,7 @@ defmodule Sendex do
   }
 
   @mailing_list_path "./priv/mailing_lists/mailing_list.csv"
+  @mail_batch 100
 
   @spec help() :: :ok
   def help do
@@ -41,26 +42,33 @@ defmodule Sendex do
 
     for {recipient_key, %Recipient{sending_status: {status, _}} = recipient_data} = recipient <-
           recipients_map,
-        status != "ok" do
-      result =
-        recipient_data
-        |> build_mail(template, attachments)
-        |> deliver()
+        status != "ok",
+        reduce: 0 do
+      acc when acc < @mail_batch ->
+        result =
+          recipient_data
+          |> build_mail(template, attachments)
+          |> deliver()
 
-      result
-      |> case do
-        {:ok, data} ->
-          Logger.info(
-            "Email successfully sent to Recipient n°#{recipient_key} with data #{inspect(data)}"
-          )
+        result
+        |> case do
+          {:ok, data} ->
+            Logger.info(
+              "Email successfully sent to Recipient n°#{recipient_key} with data #{inspect(data)}"
+            )
 
-        {:error, message} ->
-          Logger.error(
-            "Email sending to Recipient n°#{recipient_key} failed with message #{inspect(message)}"
-          )
-      end
+          {:error, message} ->
+            Logger.error(
+              "Email sending to Recipient n°#{recipient_key} failed with message #{inspect(message)}"
+            )
+        end
 
-      Mailer.update_status(mailer, recipient, result)
+        Mailer.update_status(mailer, recipient, result)
+
+        acc + 1
+
+      acc ->
+        acc
     end
 
     # use the results in Mailer state to build a new mailing list with the new sending_status
@@ -122,9 +130,7 @@ defmodule Sendex do
                         mail: mail,
                         sending_status: {status, data}
                       }} ->
-        data = (data |> is_map() && data |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)) || data
-
-        [key, title, name, city, mail, status, data]
+        [key, title, name, city, mail, status, inspect(data)]
       end)
 
     formatted_csv_file =

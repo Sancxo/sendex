@@ -15,20 +15,20 @@ defmodule Sendex.Mailer do
   def start_link(recipients_map), do: Agent.start_link(fn -> recipients_map end)
 
   @doc "Updates the Agent state; takes a mailer pid, and a delivery result as arguments."
-  @spec send_to(
+  @spec update_status(
           atom() | pid() | {atom(), any()} | {:via, atom(), any()},
           {non_neg_integer(), %Recipient{}},
           delivery_result()
         ) ::
           :ok
-  def send_to(mailer, {recipient_key, _}, result) do
+  def update_status(mailer, {recipient_key, _}, result) do
     Agent.update(mailer, fn recipients_map ->
       recipients_map
       |> Map.update!(recipient_key, fn value -> %Recipient{value | sending_status: result} end)
     end)
   end
 
-  @spec get_results(atom() | pid() | {atom(), any()} | {:via, atom(), any()}) :: any()
+  @spec get_results(atom() | pid() | {atom(), any()} | {:via, atom(), any()}) :: recipients_map()
   @doc "Returns the Mailer Agent state; takes a mailer pid as argument."
   def get_results(mailer), do: Agent.get(mailer, fn recipients_map -> recipients_map end)
 

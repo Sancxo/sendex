@@ -19,28 +19,31 @@ defmodule Sendex do
     reply: Application.compile_env(:sendex, :reply_to)
   }
 
-  @spec help() :: :ok
-  def help,
-    do:
-      Logger.notice(
-        "To send emails to the mailing list, type: Sendex.send_all(file_path, template_path, attachments_list)"
-      )
+  @mailing_list_path "./priv/mailing_lists/mailing_list.csv"
 
+  @spec help() :: :ok
+  def help do
+    Logger.notice("""
+    - To import a csv file as a mailing list, type: Sendex.import_mailing_list(file_path)
+    - After that, to send emails to each unreached contact of the created mailing list, type: Sendex.send_all(file_path, template_path, attachments_list)
+    """)
+  end
+
+  @spec send_all(binary(), binary(), img: binary(), attachment: binary()) :: :ok
   def send_all(
         csv_file,
         template,
         attachments
       ) do
-    recipients_map = csv_file |> build_mailing_list()
+    recipients_map = csv_file |> get_mailing_list()
 
     {:ok, mailer} = recipients_map |> Mailer.start_link()
 
-    for {recipient_key, %Recipient{sending_status: {result, _}} = recipient_value} =
-          recipient_tuple <-
+    for {recipient_key, %Recipient{sending_status: {status, _}} = recipient_data} = recipient <-
           recipients_map,
-        result != :ok do
+        status != "ok" do
       result =
-        recipient_value
+        recipient_data
         |> build_mail(template, attachments)
         |> deliver()
 
@@ -57,39 +60,24 @@ defmodule Sendex do
           )
       end
 
-      Mailer.send_to(mailer, recipient_tuple, result)
+      Mailer.update_status(mailer, recipient, result)
     end
 
-    # use these results to build a report
-    results =
-      mailer
-      |> Mailer.get_results()
-      |> Enum.map(fn {_key,
-                      %Recipient{
-                        title: title,
-                        name: name,
-                        city: city,
-                        mail: mail,
-                        sending_status: {status, data}
-                      }} ->
-        [title, name, city, mail, status, data |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)]
-      end)
-
-    results =
-      [["title", "name", "city", "mail", "status", "data"] | results]
-      |> CSV.dump_to_iodata()
-
-    "./priv/results/results.csv"
-    |> File.write!(results)
+    # use the results in Mailer state to build a new mailing list with the new sending_status
+    mailer
+    |> Mailer.get_results()
+    |> build_mailing_list()
 
     Mailer.stop_mailer(mailer)
   end
 
-  @spec build_mailing_list(binary() | list()) :: %{non_neg_integer() => %Recipient{}}
-  defp build_mailing_list(file) when file |> is_binary,
-    do: File.read!(file) |> CSV.parse_string() |> build_mailing_list()
+  @spec import_mailing_list(binary() | list()) :: :ok
+  def import_mailing_list(file \\ @mocked_csv)
 
-  defp build_mailing_list(file) when file |> is_list do
+  def import_mailing_list(file) when file |> is_binary,
+    do: file |> File.read!() |> CSV.parse_string() |> import_mailing_list()
+
+  def import_mailing_list(file) when file |> is_list do
     file
     |> Enum.reduce(%{}, fn
       ["", "", "", "", "", "", "", "", "", ""], acc ->
@@ -119,6 +107,52 @@ defmodule Sendex do
         }
 
         acc |> Map.put(acc |> map_size(), recipient)
+    end)
+    # Doing a new mailing list from the recipients_map allows us to be sure that each contact is formatted with the %Recipient{} model.
+    |> build_mailing_list()
+  end
+
+  @spec build_mailing_list(Mailer.recipients_map()) :: :ok
+  defp build_mailing_list(recipients_map) do
+    formatted_csv_file =
+      recipients_map
+      |> Enum.map(fn {key,
+                      %Recipient{
+                        title: title,
+                        name: name,
+                        city: city,
+                        mail: mail,
+                        sending_status: {status, data}
+                      }} ->
+        data = (data |> is_map() && data |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)) || data
+
+        [key, title, name, city, mail, status, data]
+      end)
+
+    formatted_csv_file =
+      [["no", "title", "name", "city", "mail", "status", "data"] | formatted_csv_file]
+      |> CSV.dump_to_iodata()
+
+    @mailing_list_path
+    |> File.write!(formatted_csv_file)
+  end
+
+  @spec get_mailing_list(binary()) :: Mailer.recipients_map()
+  defp get_mailing_list(file_path) do
+    file_path
+    |> File.read!()
+    |> CSV.parse_string()
+    |> Enum.reduce(%{}, fn
+      [key, title, name, city, mail, status, data], acc ->
+        recipient = %Recipient{
+          title: title,
+          name: name,
+          city: city,
+          mail: mail,
+          sending_status: {status, data}
+        }
+
+        acc |> Map.put(key, recipient)
     end)
   end
 

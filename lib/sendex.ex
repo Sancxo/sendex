@@ -34,7 +34,8 @@ defmodule Sendex do
   def send_all(
         csv_file,
         template,
-        attachments
+        attachments,
+        batch \\ @mail_batch
       ) do
     recipients_map = csv_file |> get_mailing_list()
 
@@ -44,7 +45,7 @@ defmodule Sendex do
           recipients_map,
         status != "ok",
         reduce: 0 do
-      acc when acc < @mail_batch ->
+      acc when acc < batch ->
         result =
           recipient_data
           |> build_mail(template, attachments)

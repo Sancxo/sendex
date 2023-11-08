@@ -72,8 +72,6 @@ defmodule Sendex do
   end
 
   @spec import_mailing_list(binary() | list()) :: :ok
-  def import_mailing_list(file \\ @mocked_csv)
-
   def import_mailing_list(file) when file |> is_binary,
     do: file |> File.read!() |> CSV.parse_string() |> import_mailing_list()
 
